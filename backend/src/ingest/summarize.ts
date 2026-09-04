@@ -12,13 +12,13 @@ const groq = () => (client ??= new Groq());
 const Summary = z.object({
   summary: z
     .string()
-    .describe("Summary of the article in Vietnamese, 2-3 sentences, focused on what is new"),
+    .describe("Summary in Vietnamese, 2-3 sentences, leading with the concrete practice or shift in approach the article proposes"),
   tags: z
     .array(z.enum(TAGS))
     .describe("1-3 tags describing the main topics, chosen from the fixed list"),
   score: z
     .number()
-    .describe("0-100: how worth reading this is for a working programmer"),
+    .describe("0-100: after reading this, would a working programmer actually do something differently"),
 });
 
 export type SummaryResult = z.infer<typeof Summary>;
@@ -35,16 +35,40 @@ const { $schema: _drop, ...JSON_SCHEMA } = z.toJSONSchema(Summary) as Record<
 // Written in English, but it deliberately asks for Vietnamese summaries: the
 // reader of this app is Vietnamese, so the output language is a product decision,
 // not an artifact of how the prompt happens to be written.
+//
+// The scoring rubric is the heart of this app. It ranks by "would I work differently
+// after reading this", NOT by importance or popularity. Announcements score low on
+// purpose, however big the news — that is the point, not an oversight.
 const SYSTEM = `You are a tech-news assistant for a Vietnamese software developer.
 
+This reader is not trying to keep up with announcements. They are looking for articles
+that change how they work. A model example of what they want: a post explaining how to
+orchestrate several coding agents across separate git worktrees, read by someone who
+until then had only ever prompted in a single session. After reading it, they do the
+job differently. What they do not want is the article that is interesting to read and
+forgotten a week later.
+
 For each article you are given:
-1. Summarize IN VIETNAMESE, 2-3 sentences. Say what is actually NEW or notable —
-   do not restate the headline, do not speak in generalities.
+1. Summarize IN VIETNAMESE, 2-3 sentences. Lead with the concrete practice, technique
+   or change in approach the article actually proposes. Do not restate the headline.
+   If the article proposes nothing a reader could act on, say that plainly rather than
+   dressing it up as insight.
 2. Assign 1-3 tags, chosen only from this list: ${TAGS.join(", ")}
-3. Score 0-100 for how worth reading it is for a working programmer:
-   - 80-100: changes how people work, a significant new technology, deep analysis
-   - 50-79: useful, worth skimming
-   - 0-49: filler, thinly veiled marketing, drama, a rehash of old news
+3. Score 0-100 on a single question: after reading this, would a working programmer
+   do something differently?
+   - 80-100: a concrete way of working they could adopt this week — a technique,
+     workflow, or structure, best of all with the author's hard-won detail about what
+     broke and why. Or something that reframes a problem the reader already has.
+   - 50-79: real knowledge worth having that does not change what they do tomorrow —
+     solid explanations, post-mortems, deep dives into how something works.
+   - 0-49: news that something exists or happened. Model and product launches and what
+     they can do, funding, acquisitions, benchmarks, roadmaps, release notes. Also
+     opinion pieces, drama, listicles, and marketing. "Interesting, then forgotten"
+     belongs in this band no matter how popular the article is.
+
+Popularity is not relevance. A story at the top of Hacker News announcing a new model
+scores low. An obscure post on how one team restructured their code review can score
+high. Judge the article in front of you, not the attention around it.
 
 Keep technical terms in English (deploy, cache, runtime, ...) rather than forcing
 a Vietnamese translation. Return only JSON matching the schema, with no preamble.`;

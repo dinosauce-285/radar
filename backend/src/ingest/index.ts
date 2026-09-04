@@ -95,7 +95,11 @@ async function enrich() {
     .select()
     .from(articles)
     .where(eq(articles.status, "new"))
-    .orderBy(sql`${articles.points} DESC, ${articles.publishedAt} DESC`)
+    // Newest first, deliberately NOT by points. Ordering by popularity would spend
+    // the run's budget on whatever is highest on Hacker News — precisely the
+    // announcement news the scoring rubric is built to send to the bottom — while
+    // RSS articles, which carry no points at all, waited behind every one of them.
+    .orderBy(sql`${articles.publishedAt} DESC`)
     .limit(env.MAX_SUMMARIZE_PER_RUN)
     .all();
 

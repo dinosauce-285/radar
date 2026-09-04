@@ -10,5 +10,8 @@ ExecStart=/usr/bin/node dist/ingest/index.js
 # No EnvironmentFile here: env.ts already loads .env from ROOT via dotenv.
 StandardOutput=journal
 StandardError=journal
-# Even a slow ingest finishes well under 15 minutes; past that, treat it as hung.
-TimeoutStartSec=900
+# Throughput is capped by the Groq account's 8000 tokens/minute, which works out to
+# roughly 1.5 articles a minute — so a run's length is set by MAX_SUMMARIZE_PER_RUN,
+# not by how fast the machine is. At 10 articles plus a backfill pass that is about
+# 13 minutes worst case; 30 leaves room without letting a genuinely hung run sit forever.
+TimeoutStartSec=1800

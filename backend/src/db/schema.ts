@@ -30,6 +30,9 @@ export const articles = sqliteTable("articles", {
   error: text("error"),
   readAt: integer("read_at"),
   saved: integer("saved").notNull().default(0),
+  /** How many times extraction has been attempted, so a permanently blocked URL
+   *  (403, paywall, non-HTML) stops being retried instead of looping forever. */
+  contentTries: integer("content_tries").notNull().default(0),
 });
 
 export type Article = typeof articles.$inferSelect;

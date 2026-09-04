@@ -85,6 +85,82 @@ function store(items: RawItem[]): number {
   return inserted;
 }
 
+/** Extraction can fail while summarization still succeeds, and then the model has scored
+ *  an article it never read — one such article came back at 75, the top of the feed, on
+ *  the strength of its title alone. Judge nothing "worth reading" sight unseen. */
+const NO_CONTENT_SCORE_CAP = 49;
+const cappedScore = (score: number, hasContent: boolean) =>
+  Math.round(hasContent ? score : Math.min(score, NO_CONTENT_SCORE_CAP));
+
+/**
+ * Second pass: articles already summarized but with no article text, where extraction
+ * has not been given up on yet. Fetching is cheap; re-summarizing is not, so only
+ * articles that actually gain text are sent back to the model.
+ */
+async function backfillContent() {
+  const thin = db
+    .select()
+    .from(articles)
+    .where(
+      sql`${articles.status} = 'summarized' AND ${articles.content} IS NULL
+          AND ${articles.contentTries} < ${MAX_CONTENT_TRIES}`,
+    )
+    // Highest score first: an article scored 75 that nobody read is sitting at the top
+    // of the feed misleading the reader, while one scored 12 is doing no harm at the
+    // bottom. Fix the visible ones first — the batch is capped, so order decides who
+    // waits for the next run.
+    .orderBy(sql`${articles.score} DESC`)
+    .limit(env.MAX_SUMMARIZE_PER_RUN)
+    .all();
+  if (thin.length === 0) return;
+
+  console.log(`\nRetrying extraction for ${thin.length} articles summarized without text...`);
+  let recovered = 0;
+
+  await pool(thin, env.SUMMARIZE_CONCURRENCY, async (row) => {
+    const extracted = await extractArticle(row.url);
+    if (!extracted) {
+      db.update(articles)
+        .set({ contentTries: row.contentTries + 1 })
+        .where(eq(articles.id, row.id))
+        .run();
+      return;
+    }
+    try {
+      const result = await summarizeArticle({
+        title: row.title,
+        sourceName: row.sourceName,
+        url: row.url,
+        content: extracted.content,
+      });
+      db.update(articles)
+        .set({
+          content: extracted.content,
+          summary: result.summary,
+          tags: JSON.stringify(result.tags),
+          score: Math.round(result.score),
+          contentTries: row.contentTries + 1,
+          error: null,
+        })
+        .where(eq(articles.id, row.id))
+        .run();
+      recovered++;
+    } catch {
+      // Leave the title-only summary in place; the next run can try again.
+      db.update(articles)
+        .set({ content: extracted.content, contentTries: row.contentTries + 1 })
+        .where(eq(articles.id, row.id))
+        .run();
+    }
+  });
+
+  console.log(`  Recovered ${recovered} of ${thin.length}`);
+}
+
+/** Give up on extraction after this many attempts — some URLs are permanently 403,
+ *  paywalled, or simply not HTML, and retrying them every run forever is waste. */
+const MAX_CONTENT_TRIES = 3;
+
 async function enrich() {
   if (!env.hasApiKey) {
     console.log("\nSkipping summarize step: no GROQ_API_KEY in .env");
@@ -94,7 +170,10 @@ async function enrich() {
   const pending = db
     .select()
     .from(articles)
-    .where(eq(articles.status, "new"))
+    // Retry failures too. A timeout, a 429, a model id that turned out to be wrong —
+    // all transient, but selecting only 'new' meant one bad run dropped those articles
+    // from the feed forever with no way back short of editing the database by hand.
+    .where(sql`${articles.status} IN ('new', 'failed')`)
     // Newest first, deliberately NOT by points. Ordering by popularity would spend
     // the run's budget on whatever is highest on Hacker News — precisely the
     // announcement news the scoring rubric is built to send to the bottom — while
@@ -116,8 +195,9 @@ async function enrich() {
   let failed = 0;
 
   await pool(pending, env.SUMMARIZE_CONCURRENCY, async (row) => {
+    let extracted: Awaited<ReturnType<typeof extractArticle>> = null;
     try {
-      const extracted = await extractArticle(row.url);
+      extracted = await extractArticle(row.url);
       const result = await summarizeArticle({
         title: row.title,
         sourceName: row.sourceName,
@@ -130,8 +210,9 @@ async function enrich() {
           content: extracted?.content ?? null,
           summary: result.summary,
           tags: JSON.stringify(result.tags),
-          score: Math.round(result.score),
+          score: cappedScore(result.score, extracted !== null),
           status: "summarized",
+          contentTries: row.contentTries + 1,
           error: null,
         })
         .where(eq(articles.id, row.id))
@@ -142,7 +223,14 @@ async function enrich() {
     } catch (err) {
       failed++;
       db.update(articles)
-        .set({ status: "failed", error: (err as Error).message.slice(0, 500) })
+        .set({
+          // Keep whatever was already downloaded. Discarding it meant every retry after
+          // a rate-limited summarize re-fetched the article from scratch.
+          content: extracted?.content ?? row.content,
+          contentTries: row.contentTries + 1,
+          status: "failed",
+          error: (err as Error).message.slice(0, 500),
+        })
         .where(eq(articles.id, row.id))
         .run();
       process.stdout.write(`\r  ${done + failed}/${pending.length}`);
@@ -161,6 +249,7 @@ async function main() {
   console.log(`\nCollected ${items.length} items, ${inserted} new after deduplication`);
 
   await enrich();
+  await backfillContent();
 
   const total = db.select({ n: sql<number>`count(*)` }).from(articles).get();
   console.log(

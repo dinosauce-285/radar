@@ -22,7 +22,8 @@ CREATE TABLE IF NOT EXISTS articles (
   status          TEXT    NOT NULL DEFAULT 'new',
   error           TEXT,
   read_at         INTEGER,
-  saved           INTEGER NOT NULL DEFAULT 0
+  saved           INTEGER NOT NULL DEFAULT 0,
+  content_tries   INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE INDEX IF NOT EXISTS idx_articles_published ON articles(published_at DESC);

@@ -7,7 +7,9 @@ import { ArticleCard } from "./components/ArticleCard";
 import { Sidebar } from "./components/Sidebar";
 
 export default function App() {
-  const [query, setQuery] = useState<Query>({ filter: "all", sort: "score" });
+  // minScore 50 ngay tu dau: band 0-49 theo rubric la tin vun, doc xong quen.
+  // De mac dinh 0 nghia la moi lan mo app deu phai tu tay loc chung di.
+  const [query, setQuery] = useState<Query>({ filter: "all", sort: "score", minScore: 50 });
   const [search, setSearch] = useState("");
   const [articles, setArticles] = useState<Article[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
@@ -73,9 +75,9 @@ export default function App() {
             onChange={(e) => patch({ minScore: Number(e.target.value) })}
             className="rounded border border-[var(--color-line)] bg-[var(--color-panel)] px-2 py-1.5 text-sm text-slate-400 focus:outline-none"
           >
-            <option value={0}>Moi muc diem</option>
-            <option value={50}>≥ 50</option>
-            <option value={80}>≥ 80</option>
+            <option value={80}>Doi cach lam viec · ≥ 80</option>
+            <option value={50}>Dang doc · ≥ 50</option>
+            <option value={0}>Tat ca, ke ca tin vun</option>
           </select>
 
           {(query.tag || query.source) && (
@@ -96,10 +98,26 @@ export default function App() {
 
         {!error && !loading && articles.length === 0 && (
           <div className="px-5 py-16 text-center text-sm text-slate-600">
-            <p>Chua co bai nao.</p>
-            <p className="mt-2">
-              Chay <code className="rounded bg-white/5 px-1.5 py-0.5 text-slate-400">pnpm ingest</code> de thu tin ve.
-            </p>
+            {/* Loc rong khac han kho rong. Khong phan biet hai cai nay thi
+                nguoi dung tuong ingest hong trong khi chi la nguong qua cao. */}
+            {(query.minScore ?? 0) > 0 || query.tag || query.source || query.q ? (
+              <>
+                <p>Khong co bai nao khop bo loc hien tai.</p>
+                <button
+                  onClick={() => patch({ minScore: 0, tag: undefined, source: undefined })}
+                  className="mt-2 text-sky-400 hover:text-sky-300"
+                >
+                  Bo loc, xem tat ca
+                </button>
+              </>
+            ) : (
+              <>
+                <p>Chua co bai nao duoc tom tat.</p>
+                <p className="mt-2">
+                  Chay <code className="rounded bg-white/5 px-1.5 py-0.5 text-slate-400">pnpm ingest</code> de thu tin ve.
+                </p>
+              </>
+            )}
           </div>
         )}
 

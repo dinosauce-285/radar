@@ -7,15 +7,23 @@ import { TAGS } from "./sources.js";
 // and this module is imported at the top of ingest/index.ts. Constructing it at
 // module scope would take down the fetch/store steps too, which need no key.
 let client: Groq | null = null;
-const groq = () => (client ??= new Groq());
+// The SDK defaults to a 60s timeout, which is not enough for a reasoning model reading a
+// long article with several requests in flight — four of five test articles died on it.
+// maxRetries covers 429 with backoff, which this account hits often on gpt-oss-120b.
+// Two attempts still left articles failing mid-run; four lets a rate limit resolve itself
+// rather than deferring the article to a later ingest.
+const groq = () => (client ??= new Groq({ timeout: 150_000, maxRetries: 4 }));
 
 const Summary = z.object({
   summary: z
     .string()
     .describe("Summary in Vietnamese, 2-3 sentences, leading with the concrete practice or shift in approach the article proposes"),
+  // Deliberately z.string() and not z.enum(TAGS): an invented tag would fail the whole
+  // parse and mark the article permanently 'failed' over one bad word. Unknown tags are
+  // dropped below instead. The JSON Schema sent to the model still carries the enum.
   tags: z
-    .array(z.enum(TAGS))
-    .describe("1-3 tags describing the main topics, chosen from the fixed list"),
+    .array(z.string())
+    .describe("Topics from the fixed list that this article genuinely addresses. Empty array if none apply."),
   score: z
     .number()
     .describe("0-100: after reading this, would a working programmer actually do something differently"),
@@ -27,10 +35,20 @@ export type SummaryResult = z.infer<typeof Summary>;
 // emits `additionalProperties: false` and a complete `required` list, which is
 // exactly what strict mode wants. Only `$schema` has to go: strict mode rejects
 // keys it doesn't recognize.
-const { $schema: _drop, ...JSON_SCHEMA } = z.toJSONSchema(Summary) as Record<
+const { $schema: _drop, ...BASE_SCHEMA } = z.toJSONSchema(Summary) as Record<
   string,
   unknown
 >;
+
+// Zod validates leniently (see `tags` above), but the model is still shown the closed
+// list — constraining it up front produces far better tag choices than correcting after.
+const JSON_SCHEMA = {
+  ...BASE_SCHEMA,
+  properties: {
+    ...(BASE_SCHEMA.properties as Record<string, unknown>),
+    tags: { type: "array", items: { type: "string", enum: [...TAGS] } },
+  },
+};
 
 // Written in English, but it deliberately asks for Vietnamese summaries: the
 // reader of this app is Vietnamese, so the output language is a product decision,
@@ -53,7 +71,12 @@ For each article you are given:
    or change in approach the article actually proposes. Do not restate the headline.
    If the article proposes nothing a reader could act on, say that plainly rather than
    dressing it up as insight.
-2. Assign 1-3 tags, chosen only from this list: ${TAGS.join(", ")}
+2. Tag the article with the topics from this list that it GENUINELY addresses:
+   ${TAGS.join(", ")}
+   Pick at most 3, and only ones the article is actually about — not ones it mentions in
+   passing. If none of them apply, return an empty array. An empty array is a normal,
+   expected answer, not a failure: it is how an article that has nothing for this reader
+   is kept out of their feed. Do not stretch to find a tag.
 3. Score 0-100 on a single question: after reading this, would a working programmer
    do something differently?
    - 80-100: a concrete way of working they could adopt this week — a technique,
@@ -120,11 +143,19 @@ function responseFormat(m: typeof mode) {
     : ({ type: "json_object" } as const);
 }
 
-/** A 400 because the model lacks json_schema support — as opposed to a real
- *  failure like 401, 429 or a 5xx, which must not be swallowed. */
+/** The model cannot do json_schema at all — a capability fact, true for every request,
+ *  so the run switches mode permanently. */
 function isFormatUnsupported(err: unknown): boolean {
   if (!(err instanceof Groq.APIError) || err.status !== 400) return false;
-  return /response_format|json_schema|structured output/i.test(err.message ?? "");
+  return /response_format|json_schema|structured output|not supported/i.test(err.message ?? "");
+}
+
+/** The model supports json_schema but this one generation failed to satisfy it. That is
+ *  a per-request accident, not a capability limit — retry this article in the looser mode
+ *  without condemning every later article to it. */
+function isSchemaMiss(err: unknown): boolean {
+  if (!(err instanceof Groq.APIError) || err.status !== 400) return false;
+  return /does not match the expected schema|failed to generate/i.test(err.message ?? "");
 }
 
 async function call(m: typeof mode, userContent: string): Promise<string> {
@@ -133,6 +164,9 @@ async function call(m: typeof mode, userContent: string): Promise<string> {
     max_completion_tokens: 2_000,
     // Summaries should be consistent, not creative.
     temperature: 0.3,
+    // gpt-oss reasons before answering, which is wasted on summarization and was a large
+    // part of why requests ran past the timeout. Only these models accept the parameter.
+    ...(env.GROQ_MODEL.includes("gpt-oss") ? { reasoning_effort: "low" as const } : {}),
     response_format: responseFormat(m),
     messages: [
       // json_object mode knows nothing about the schema, so inline it in the prompt.
@@ -158,8 +192,10 @@ export async function summarizeArticle(input: {
   url: string;
   content: string | null;
 }): Promise<SummaryResult> {
+  // 40k characters is roughly 10k tokens for a 2-3 sentence summary — the tail of a long
+  // article changes the summary very little and costs latency on every single request.
   const body = input.content
-    ? input.content.slice(0, 40_000)
+    ? input.content.slice(0, 14_000)
     : "(content could not be extracted — summarize from the title and source alone)";
 
   const userContent = `Source: ${input.sourceName}\nTitle: ${input.title}\nURL: ${input.url}\n\n---\n${body}`;
@@ -168,12 +204,18 @@ export async function summarizeArticle(input: {
   try {
     text = await call(mode, userContent);
   } catch (err) {
-    if (mode !== "json_schema" || !isFormatUnsupported(err)) throw err;
-    console.warn(
-      `\n  (${env.GROQ_MODEL} does not support json_schema — falling back to json_object)`,
-    );
-    mode = "json_object";
-    text = await call(mode, userContent);
+    if (mode === "json_schema" && isFormatUnsupported(err)) {
+      console.warn(
+        `\n  (${env.GROQ_MODEL} does not support json_schema — falling back to json_object)`,
+      );
+      mode = "json_object";
+      text = await call(mode, userContent);
+    } else if (isSchemaMiss(err)) {
+      // One-off bad generation: retry this article only, leaving `mode` alone.
+      text = await call("json_object", userContent);
+    } else {
+      throw err;
+    }
   }
 
   let raw: unknown;
@@ -190,6 +232,11 @@ export async function summarizeArticle(input: {
     throw new Error(`Result did not match schema: ${parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")}`);
   }
 
-  // Clamp to 0-100 in case the model returns something outside the range.
-  return { ...parsed.data, score: Math.max(0, Math.min(100, parsed.data.score)) };
+  // Drop anything outside the vocabulary rather than failing the article over it.
+  const known = new Set<string>(TAGS);
+  return {
+    ...parsed.data,
+    tags: parsed.data.tags.filter((t) => known.has(t)),
+    score: Math.max(0, Math.min(100, parsed.data.score)),
+  };
 }

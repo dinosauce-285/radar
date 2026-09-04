@@ -5,6 +5,26 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="robots" content="noindex, nofollow" />
     <title>radar</title>
+
+    <!-- Inter carries Vietnamese diacritics properly at small sizes, which the default
+         system stack on Linux does not, and this interface is almost entirely Vietnamese
+         prose at 13.5px. Loaded here rather than via an @import in index.css: Tailwind
+         emits its own rules first, which makes a trailing @import invalid, and the build
+         drops it silently — the font never loads in production. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,400..700;1,14..32,400..600&display=swap"
+    />
+    <script>
+      // Runs before first paint: reading localStorage from React would flash the
+      // wrong theme for a frame on every load.
+      try {
+        var t = localStorage.getItem("radar.theme");
+        if (t === "light" || t === "dark") document.documentElement.dataset.theme = t;
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

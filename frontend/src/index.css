@@ -1,10 +1,138 @@
 @import "tailwindcss";
 
+/*
+ * Two themes, one set of names. Every component reads these variables and never a
+ * literal colour, so a theme is a block of redefinitions rather than a second set of
+ * classes. Light is the base; dark is layered on twice — once for the system
+ * preference, once for an explicit choice — so the toggle wins in both directions.
+ *
+ * Both ramps are checked against their own background: title / body / muted clear
+ * WCAG AA for normal text, and faint — the smallest meta text in the app — clears it
+ * against the row hover surface too, not just the page.
+ */
 @theme {
-  --color-ink: #0f1115;
-  --color-panel: #161a21;
-  --color-line: #232833;
+  /* Surfaces, from the page up to the most raised chip. A cool blue-grey neutral,
+     the same hue family as the dark palette, so the two themes read as one product. */
+  --color-bg: #fbfcfd;
+  --color-surface: #f0f3f7;
+  --color-raised: #e7ecf2;
+  --color-line: #ccd6e2;
+  --color-line-soft: #e2e8f0;
+
+  /* Text ramp: roughly 18 / 9.5 / 6.8 / 4.9 against the page. */
+  --color-title: #0e131a;
+  --color-body: #3b4551;
+  --color-muted: #4f5a68;
+  --color-faint: #657080;
+
+  /* Accent: selection and focus only, never decoration. */
+  --color-accent: #1667c2;
+  --color-accent-dim: #cfe0f6;
+
+  /* Score bands. Semantic, and deliberately separate from the accent. */
+  --color-band-high: #0f7345;
+  --color-band-mid: #8a5c06;
+  --color-band-low: #6d7885;
+
+  --color-danger: #b42318;
+
+  /* Dark-on-light wants the browser's normal rendering; antialiasing it here is what
+     makes light themes look washed out and thin. Dark-on-dark is the opposite case. */
+  --font-smoothing: auto;
+
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
 }
 
-html { color-scheme: dark; }
-body { @apply bg-[var(--color-ink)] text-slate-200 antialiased; }
+/* Dark by system preference — unless the reader has explicitly asked for light. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --color-bg: #0f1115;
+    --color-surface: #161a21;
+    --color-raised: #1b2029;
+    --color-line: #232833;
+    --color-line-soft: #1c212a;
+
+    --color-title: #e8ecf2;
+    --color-body: #b3bdcc;
+    --color-muted: #96a3b4;
+    --color-faint: #7a8492;
+
+    --color-accent: #5aa9e6;
+    --color-accent-dim: #2c4d68;
+
+    --color-band-high: #5fd4a0;
+    --color-band-mid: #e3b341;
+    --color-band-low: #7b8798;
+
+    --color-danger: #f87171;
+
+    --font-smoothing: antialiased;
+  }
+}
+
+/* Dark by explicit choice, which must also beat a light OS setting. */
+:root[data-theme="dark"] {
+  --color-bg: #0f1115;
+  --color-surface: #161a21;
+  --color-raised: #1b2029;
+  --color-line: #232833;
+  --color-line-soft: #1c212a;
+
+  --color-title: #e8ecf2;
+  --color-body: #b3bdcc;
+  --color-muted: #96a3b4;
+  --color-faint: #7a8492;
+
+  --color-accent: #5aa9e6;
+  --color-accent-dim: #2c4d68;
+
+  --color-band-high: #5fd4a0;
+  --color-band-mid: #e3b341;
+  --color-band-low: #7b8798;
+
+  --color-danger: #f87171;
+
+  --font-smoothing: antialiased;
+}
+
+/* Tells the browser which palette to render selects, scrollbars and the caret in.
+   Without it those keep the OS theme and look pasted onto the page. */
+:root {
+  color-scheme: light;
+}
+:root:not([data-theme]) {
+  color-scheme: light dark;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+body {
+  @apply bg-[var(--color-bg)] text-[var(--color-body)];
+  font-family: var(--font-sans);
+  font-synthesis-weight: none;
+  -webkit-font-smoothing: var(--font-smoothing);
+}
+
+/* One focus treatment for the whole app rather than per-component rings. */
+:where(a, button, input, select, [tabindex]):focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+/* Vietnamese prose wraps better with pretty; it costs nothing where unsupported. */
+.prose-vn {
+  text-wrap: pretty;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

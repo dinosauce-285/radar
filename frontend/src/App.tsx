@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { ThemeToggle } from "./components/ThemeToggle";
 import {
   fetchArticles, fetchStats, markRead, markSaved,
   type Article, type Stats, type Query,
@@ -7,9 +8,9 @@ import { ArticleCard } from "./components/ArticleCard";
 import { Sidebar } from "./components/Sidebar";
 
 export default function App() {
-  // minScore 50 ngay tu dau: band 0-49 theo rubric la tin vun, doc xong quen.
-  // De mac dinh 0 nghia la moi lan mo app deu phai tu tay loc chung di.
-  const [query, setQuery] = useState<Query>({ filter: "all", sort: "score", minScore: 50 });
+  // No default minScore: the real filter is the topic gate, applied by the API — an
+  // article matching none of the reader's topics never reaches here. Score only sorts.
+  const [query, setQuery] = useState<Query>({ filter: "all", sort: "score" });
   const [search, setSearch] = useState("");
   const [articles, setArticles] = useState<Article[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
@@ -49,72 +50,110 @@ export default function App() {
   const patch = (p: Partial<Query>) => setQuery((q) => ({ ...q, ...p }));
 
   return (
-    <div className="flex min-h-screen">
+    /* The sidebar and the reading column are centred as one unit. Pinning the sidebar
+       to the viewport edge while centring the text inside everything left over opens a
+       dead gutter between them that gets wider on every larger screen. */
+    <div className="mx-auto flex min-h-screen max-w-[1180px]">
       <Sidebar stats={stats} query={query} onChange={patch} />
 
       <main className="min-w-0 flex-1">
-        <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-[var(--color-line)] bg-[var(--color-ink)]/95 px-5 py-3 backdrop-blur">
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Tim kiem..."
-            className="w-full max-w-md rounded border border-[var(--color-line)] bg-[var(--color-panel)] px-3 py-1.5 text-sm text-slate-200 placeholder:text-slate-600 focus:border-sky-600 focus:outline-none"
-          />
+        <header className="sticky top-0 z-20 border-b border-[var(--color-line)] bg-[var(--color-bg)]/90 backdrop-blur-sm">
+          <div className="mx-auto flex max-w-3xl flex-wrap items-center gap-2 px-5 py-3 sm:px-6">
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Tìm kiếm..."
+              aria-label="Tìm kiếm bài viết"
+              className="w-full min-w-0 sm:w-auto sm:flex-1 rounded-[6px] border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-1.5 text-[13px] text-[var(--color-title)] transition-colors duration-150 placeholder:text-[var(--color-faint)] hover:border-[var(--color-faint)] focus:border-[var(--color-accent)]"
+            />
 
-          <select
-            value={query.sort}
-            onChange={(e) => patch({ sort: e.target.value as Query["sort"] })}
-            className="rounded border border-[var(--color-line)] bg-[var(--color-panel)] px-2 py-1.5 text-sm text-slate-400 focus:outline-none"
-          >
-            <option value="score">Sap theo diem</option>
-            <option value="new">Moi nhat</option>
-          </select>
-
-          <select
-            value={query.minScore ?? 0}
-            onChange={(e) => patch({ minScore: Number(e.target.value) })}
-            className="rounded border border-[var(--color-line)] bg-[var(--color-panel)] px-2 py-1.5 text-sm text-slate-400 focus:outline-none"
-          >
-            <option value={80}>Doi cach lam viec · ≥ 80</option>
-            <option value={50}>Dang doc · ≥ 50</option>
-            <option value={0}>Tat ca, ke ca tin vun</option>
-          </select>
-
-          {(query.tag || query.source) && (
-            <button
-              onClick={() => patch({ tag: undefined, source: undefined })}
-              className="text-xs text-slate-500 hover:text-slate-300"
+            <select
+              value={query.sort}
+              onChange={(e) => patch({ sort: e.target.value as Query["sort"] })}
+              aria-label="Sắp xếp"
+              className="rounded-[6px] border border-[var(--color-line)] bg-[var(--color-surface)] px-2 py-1.5 text-[13px] text-[var(--color-muted)] transition-colors duration-150 hover:border-[var(--color-faint)] hover:text-[var(--color-body)]"
             >
-              xoa loc
-            </button>
-          )}
+              <option value="score">Theo điểm</option>
+              <option value="new">Mới nhất</option>
+            </select>
+
+            <select
+              value={query.minScore ?? 0}
+              onChange={(e) => patch({ minScore: Number(e.target.value) })}
+              aria-label="Lọc theo điểm"
+              className="rounded-[6px] border border-[var(--color-line)] bg-[var(--color-surface)] px-2 py-1.5 text-[13px] text-[var(--color-muted)] transition-colors duration-150 hover:border-[var(--color-faint)] hover:text-[var(--color-body)]"
+            >
+              <option value={0}>Mọi mức điểm</option>
+              <option value={50}>Đáng đọc · ≥ 50</option>
+              <option value={80}>Đổi cách làm việc · ≥ 80</option>
+            </select>
+
+            <ThemeToggle />
+
+            {(query.tag || query.source) && (
+              <button
+                onClick={() => patch({ tag: undefined, source: undefined })}
+                className="rounded-[6px] px-2 py-1.5 text-[12.5px] text-[var(--color-muted)] transition-colors duration-150 hover:text-[var(--color-title)]"
+              >
+                Bỏ lọc{query.tag ? ` "${query.tag}"` : ""}
+                {query.source ? ` "${query.source}"` : ""} ✕
+              </button>
+            )}
+          </div>
         </header>
 
-        {error && <p className="px-5 py-8 text-sm text-red-400">Loi: {error}</p>}
+        {error && (
+          <p className="mx-auto max-w-3xl px-6 py-10 text-[13.5px] text-[var(--color-danger)]">
+            Không tải được: {error}
+          </p>
+        )}
 
+        {/* Skeletons rather than a spinner: the shape of the answer is already known,
+            and a placeholder that matches it stops the page jumping when data lands. */}
         {!error && loading && articles.length === 0 && (
-          <p className="px-5 py-8 text-sm text-slate-600">Dang tai...</p>
+          <div aria-hidden className="mx-auto max-w-3xl px-5 sm:px-6">
+            {[0, 1, 2, 3].map((i) => (
+              <div key={i} className="flex gap-5 border-b border-[var(--color-line-soft)] py-5">
+                <div className="h-4 w-9 shrink-0 rounded bg-[var(--color-surface)]" />
+                <div className="flex-1 space-y-2.5">
+                  <div className="h-4 w-2/3 rounded bg-[var(--color-surface)]" />
+                  <div className="h-3 w-full rounded bg-[var(--color-surface)]/70" />
+                  <div className="h-3 w-4/5 rounded bg-[var(--color-surface)]/70" />
+                </div>
+              </div>
+            ))}
+          </div>
         )}
 
         {!error && !loading && articles.length === 0 && (
-          <div className="px-5 py-16 text-center text-sm text-slate-600">
-            {/* Loc rong khac han kho rong. Khong phan biet hai cai nay thi
-                nguoi dung tuong ingest hong trong khi chi la nguong qua cao. */}
+          <div className="mx-auto max-w-lg px-6 py-20 text-center">
+            {/* An empty filter and an empty database look identical to the reader but
+                mean opposite things, so they must never share a message. */}
             {(query.minScore ?? 0) > 0 || query.tag || query.source || query.q ? (
               <>
-                <p>Khong co bai nao khop bo loc hien tai.</p>
+                <p className="text-[14px] text-[var(--color-body)]">
+                  Không có bài nào khớp bộ lọc hiện tại.
+                </p>
                 <button
-                  onClick={() => patch({ minScore: 0, tag: undefined, source: undefined })}
-                  className="mt-2 text-sky-400 hover:text-sky-300"
+                  onClick={() =>
+                    patch({ minScore: 0, tag: undefined, source: undefined })
+                  }
+                  className="mt-3 text-[13px] text-[var(--color-accent)] hover:underline"
                 >
-                  Bo loc, xem tat ca
+                  Bỏ hết bộ lọc
                 </button>
               </>
             ) : (
               <>
-                <p>Chua co bai nao duoc tom tat.</p>
-                <p className="mt-2">
-                  Chay <code className="rounded bg-white/5 px-1.5 py-0.5 text-slate-400">pnpm ingest</code> de thu tin ve.
+                <p className="text-[14px] text-[var(--color-body)]">
+                  Chưa có bài nào được tóm tắt.
+                </p>
+                <p className="mt-2 text-[13px] text-[var(--color-muted)]">
+                  Chạy{" "}
+                  <code className="rounded bg-[var(--color-raised)] px-1.5 py-0.5 text-[12px] text-[var(--color-body)]">
+                    pnpm ingest
+                  </code>{" "}
+                  để thu tin về.
                 </p>
               </>
             )}

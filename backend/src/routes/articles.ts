@@ -4,6 +4,11 @@ import { db, sqlite } from "../db/client.js";
 
 export const articlesRoute = new Hono();
 
+/** An article the model tagged with none of the reader's topics never reaches the feed,
+ *  so the sidebar must not count it either — otherwise the counters promise articles the
+ *  reader cannot find, which reads as a broken feed rather than a working filter. */
+const ON_TOPIC = "json_array_length(COALESCE(tags, '[]')) > 0";
+
 type Row = Record<string, unknown> & { tags: string | null };
 
 const shape = (r: Row) => ({
@@ -21,6 +26,7 @@ const shape = (r: Row) => ({
  *   minScore  minimum score
  *   filter    all | unread | saved
  *   sort      score | new
+ *   offTopic  1 to also return articles matching none of the reader's topics
  */
 articlesRoute.get("/articles", (c) => {
   const q = c.req.query("q")?.trim();
@@ -50,6 +56,14 @@ articlesRoute.get("/articles", (c) => {
   }
   if (filter === "unread") where.push("a.read_at IS NULL");
   if (filter === "saved") where.push("a.saved = 1");
+
+  // The feed is gated on topic, not on score: an article the model tagged with none of
+  // the reader's topics has nothing for them, however well written it is. `offTopic=1`
+  // reveals them again, which is the only way to tell "tagged nothing" apart from
+  // "never summarized" when the tagging looks wrong.
+  if (c.req.query("offTopic") !== "1") {
+    where.push(ON_TOPIC.replace("COALESCE(tags", "COALESCE(a.tags"));
+  }
 
   let from = "articles a";
   let orderBy =
@@ -91,7 +105,7 @@ articlesRoute.get("/stats", (c) => {
   const sources = sqlite
     .prepare(
       `SELECT source_name AS source, COUNT(*) AS count
-       FROM articles WHERE status = 'summarized'
+       FROM articles WHERE status = 'summarized' AND ${ON_TOPIC}
        GROUP BY source_name ORDER BY count DESC`,
     )
     .all();
@@ -102,7 +116,7 @@ articlesRoute.get("/stats", (c) => {
          COUNT(*) AS total,
          SUM(CASE WHEN read_at IS NULL THEN 1 ELSE 0 END) AS unread,
          SUM(saved) AS saved
-       FROM articles WHERE status = 'summarized'`,
+       FROM articles WHERE status = 'summarized' AND ${ON_TOPIC}`,
     )
     .get();
 

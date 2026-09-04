@@ -1,0 +1,15 @@
+[Unit]
+Description=Run radar ingest every 30 minutes
+
+[Timer]
+# First run, 2 minutes after boot
+OnBootSec=2min
+# Then every 30 minutes, measured from when the previous run FINISHED
+OnUnitActiveSec=30min
+# If the machine was off at the scheduled time, catch up once on next boot
+Persistent=true
+# Jitter up to 2 minutes, so runs don't all land exactly on the minute
+RandomizedDelaySec=2min
+
+[Install]
+WantedBy=timers.target

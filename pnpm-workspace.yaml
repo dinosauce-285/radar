@@ -1,0 +1,9 @@
+packages:
+  - backend
+  - frontend
+
+# better-sqlite3 is a native module and compiles on install; esbuild downloads a
+# binary. pnpm 11 blocks install scripts by default, so both need explicit opt-in.
+allowBuilds:
+  better-sqlite3: true
+  esbuild: true

@@ -1,0 +1,14 @@
+[Unit]
+Description=radar — collect and summarize programming news
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/qt/projects/radar/backend
+ExecStart=/usr/bin/node dist/ingest/index.js
+# No EnvironmentFile here: env.ts already loads .env from ROOT via dotenv.
+StandardOutput=journal
+StandardError=journal
+# Even a slow ingest finishes well under 15 minutes; past that, treat it as hung.
+TimeoutStartSec=900

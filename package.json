@@ -1,0 +1,13 @@
+{
+  "name": "radar",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "pnpm --parallel --filter \"./**\" dev",
+    "build": "pnpm --filter frontend build && pnpm --filter backend build",
+    "start": "pnpm --filter backend start",
+    "ingest": "pnpm --filter backend ingest",
+    "typecheck": "pnpm -r typecheck"
+  },
+  "packageManager": "pnpm@11.5.1"
+}

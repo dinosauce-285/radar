@@ -131,15 +131,36 @@ export const RSS: RssSource[] = [
 ];
 
 /**
- * The fixed tag vocabulary. The model must pick from this list rather than
- * inventing its own, which is what keeps the UI filters stable over time.
+ * The reader's topic vocabulary, taken from the interest profile they filled in
+ * rather than from generic tech categories. This is what the feed filters on: an
+ * article that matches none of these is not shown, so the list has to describe
+ * what this particular reader wants, not what the industry writes about.
+ *
+ * The model must choose from this list and MAY return an empty array — that is the
+ * signal for "nothing here for this reader", and it is how irrelevant articles get
+ * kept out of the feed.
  */
 export const TAGS = [
-  // 'workflow' and 'agents' exist so the two things this reader cares about most —
-  // ways of working, and how people actually drive coding agents — are filterable
-  // in the UI rather than buried under the generic 'ai' tag.
-  "workflow", "agents",
-  "ai", "llm", "web", "frontend", "backend", "database", "devops",
-  "cloud", "security", "performance", "language", "tooling",
-  "architecture", "career", "opensource", "hardware",
+  // driving coding agents
+  "agents", "agent-cost", "agent-tooling",
+  // working alongside AI
+  "ai-skills", "ai-industry", "ai-products", "prompting",
+  // craft
+  "refactoring", "code-review", "code-reading",
+  // architecture
+  "architecture", "api-design", "database", "db-internals", "caching",
+  "queues", "reliability", "realtime", "local-first",
+  // production
+  "observability", "incident", "deploy", "performance", "scaling",
+  "infra-cost", "oncall",
+  // security
+  "security", "llm-security",
+  // career
+  "job-market", "career-path", "indie", "burnout",
+  // team
+  "process", "tech-decisions",
+  // tools
+  "git", "terminal", "editor", "ci-cd", "frontend", "css", "backend",
+  // fundamentals
+  "networking", "os", "algorithms",
 ] as const;

@@ -128,6 +128,19 @@ export const RSS: RssSource[] = [
   { name: "Dropbox Tech",               url: "https://dropbox.tech/feed" },
   { name: "Spotify Engineering",        url: "https://engineering.atspotify.com/feed/" },
   { name: "Slack Engineering",          url: "https://slack.engineering/feed/" },
+
+  /**
+   * GitHub Trending. Not an article feed: each item is a repository, and the text the
+   * extractor pulls is its README. A repo is "a thing that exists", which the rubric
+   * pushes into 0-49 — correct, and it does not hide them, because the feed gates on
+   * topic rather than score. A trending Neovim plugin still gets tagged `editor` and
+   * appears, ranked below writing that changes how you work.
+   *
+   * There is no official trending API; this is the community mirror. maxAgeDays is 3
+   * because the feed is a daily snapshot of what is hot now — a fortnight of old
+   * snapshots is not a trend, it is noise.
+   */
+  { name: "GitHub Trending",            url: "https://mshibanami.github.io/GitHubTrendingRSS/daily/all.xml", maxAgeDays: 3 },
 ];
 
 /**

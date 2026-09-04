@@ -6,3 +6,6 @@ data/*.db-*
 .DS_Store
 *.log
 *.tsbuildinfo
+topics-picker.html
+sources-coverage.html
+pipeline.html

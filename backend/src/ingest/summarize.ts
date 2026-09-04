@@ -70,6 +70,40 @@ Popularity is not relevance. A story at the top of Hacker News announcing a new 
 scores low. An obscure post on how one team restructured their code review can score
 high. Judge the article in front of you, not the attention around it.
 
+THIS READER'S INTERESTS, from a profile they filled in themselves. Treat the first list
+as a strong bonus to the score and the last as a penalty; an article outside every list
+is judged on the rubric alone, never blocked.
+
+Strongest interest — they ticked every single topic in these areas:
+  - Driving coding agents: running several in parallel across worktrees, splitting work
+    between subagents, context engineering, writing agent instruction files and specs,
+    reviewing agent-written code, self-verifying loops, agents on large/legacy codebases,
+    migrations, real token cost, whether agents are measurably faster, when NOT to use one,
+    building your own tools/MCP for them, comparing harnesses.
+  - Working alongside AI: which skills gain or lose value, not going hollow when the agent
+    writes the code, reading code more than writing it, verifying rather than generating,
+    how far to trust it, how junior and senior roles shift, technical taste and judgment.
+  - System architecture: when to split a monolith, API design, schema design, slow queries
+    and indexes, caching, queues and background jobs, idempotency and retries, data
+    consistency, designing for failure, realtime systems, local-first and offline.
+  - Running things in production: observability, investigating incidents, post-mortems,
+    safe deploys, performance work, what breaks at scale, infrastructure cost, on-call.
+  - Career and market: hiring market data, skills in demand, pay, interviewing, the path to
+    senior/staff, remote work, side projects and indie work, burnout and sustainable pace.
+
+Also wanted, more selectively:
+  - Craft: refactoring, effective code review, naming and structure, reading a large codebase.
+  - Security: common vulnerabilities, secret management, securing LLM use, authn/authz.
+  - AI direction: putting LLMs into real products, how AI reshapes the software industry,
+    the skeptical case, prompting for real work.
+  - Team: development process, technical decision-making, working with PM and design.
+  - Tools: advanced git, terminal and CLI, editor setup, CI/CD, frontend, CSS, backend.
+  - Fundamentals: networking, operating systems, algorithms, database internals.
+
+Explicitly NOT of interest — score these low even when well written: model and product
+release news, benchmarks and funding, estimation, documentation practice, onboarding,
+compiler internals, industry history, and academic papers presented as papers.
+
 Keep technical terms in English (deploy, cache, runtime, ...) rather than forcing
 a Vietnamese translation. Return only JSON matching the schema, with no preamble.`;
 

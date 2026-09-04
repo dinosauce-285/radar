@@ -164,7 +164,15 @@ async function main() {
   );
 }
 
-main().catch((err) => {
-  console.error("Ingest failed:", err);
-  process.exit(1);
-});
+main()
+  .then(() => {
+    // Fetching 80+ feeds in parallel leaves keep-alive sockets open, and Node will
+    // not exit while any handle is still live — the run hung for minutes past the
+    // last write. This is a one-shot batch job: once main() resolves the work is
+    // committed, so exit rather than waiting on connections nobody is reading.
+    process.exit(0);
+  })
+  .catch((err) => {
+    console.error("Ingest failed:", err);
+    process.exit(1);
+  });

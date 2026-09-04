@@ -5,7 +5,7 @@ import { env } from "../env.js";
 import { fetchHackerNews } from "./fetchers/hn.js";
 import { fetchReddit } from "./fetchers/reddit.js";
 import { fetchRss } from "./fetchers/rss.js";
-import { canonicalizeUrl, dedupeKey } from "./normalize.js";
+import { canonicalizeUrl, dedupeKey, isVideoUrl } from "./normalize.js";
 import { extractArticle } from "./extract.js";
 import { summarizeArticle } from "./summarize.js";
 import type { RawItem } from "./types.js";
@@ -41,12 +41,21 @@ async function collect(): Promise<RawItem[]> {
   return out;
 }
 
-function store(items: RawItem[]): number {
+function store(items: RawItem[]): { inserted: number; videos: number } {
   const now = Math.floor(Date.now() / 1000);
   const seen = new Set<string>();
   let inserted = 0;
+  let videos = 0;
 
   for (const item of items) {
+    // Dropped before anything else. A video is not readable, and this reader wants to
+    // read — filtering here rather than at display means no fetch and no tokens go
+    // into one at all.
+    if (isVideoUrl(item.url)) {
+      videos++;
+      continue;
+    }
+
     const canonicalUrl = canonicalizeUrl(item.url);
     const key = dedupeKey(item.title, canonicalUrl);
 
@@ -82,7 +91,7 @@ function store(items: RawItem[]): number {
     inserted++;
   }
 
-  return inserted;
+  return { inserted, videos };
 }
 
 /** Extraction can fail while summarization still succeeds, and then the model has scored
@@ -245,8 +254,11 @@ async function main() {
   console.log(`[${new Date().toISOString()}] Starting ingest`);
 
   const items = await collect();
-  const inserted = store(items);
-  console.log(`\nCollected ${items.length} items, ${inserted} new after deduplication`);
+  const { inserted, videos } = store(items);
+  console.log(
+    `\nCollected ${items.length} items, ${inserted} new after deduplication` +
+      (videos > 0 ? ` (${videos} videos skipped)` : ""),
+  );
 
   await enrich();
   await backfillContent();

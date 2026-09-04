@@ -52,3 +52,29 @@ export function dedupeKey(title: string, canonicalUrl: string): string {
   } catch { /* malformed URL: fall back to hashing the title alone */ }
   return crypto.createHash("sha1").update(`${host}|${normTitle}`).digest("hex");
 }
+
+/**
+ * Hosts whose pages are a video, not an article. The reader wants to read in spare
+ * moments, not commit to a 40-minute talk, so these are dropped at ingest rather than
+ * summarized and then ranked low — a video that never enters the database costs no
+ * extraction, no tokens and no feed space.
+ *
+ * Matched on the host, so subdomains are covered while a page that merely mentions
+ * "youtube" somewhere in its path is not.
+ */
+const VIDEO_HOSTS = [
+  "youtube.com", "youtu.be", "youtube-nocookie.com", "vimeo.com", "twitch.tv",
+  "bilibili.com", "dailymotion.com", "rumble.com", "odysee.com", "loom.com",
+  "ted.com", "streamable.com", "wistia.com",
+];
+
+/** True when the URL points at a video host. */
+export function isVideoUrl(url: string): boolean {
+  let host: string;
+  try {
+    host = new URL(url).hostname.toLowerCase().replace(/^www\./, "");
+  } catch {
+    return false;
+  }
+  return VIDEO_HOSTS.some((v) => host === v || host.endsWith("." + v));
+}

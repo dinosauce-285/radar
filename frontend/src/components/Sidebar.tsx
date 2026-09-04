@@ -117,21 +117,6 @@ export function Sidebar({
         </Group>
       )}
 
-      {(stats?.sources.length ?? 0) > 0 && (
-        <Group title="Nguồn">
-          {stats!.sources.map((s) => (
-            <Item
-              key={s.source}
-              label={s.source}
-              count={s.count}
-              active={query.source === s.source}
-              onClick={() =>
-                onChange({ source: query.source === s.source ? undefined : s.source })
-              }
-            />
-          ))}
-        </Group>
-      )}
     </aside>
   );
 }
